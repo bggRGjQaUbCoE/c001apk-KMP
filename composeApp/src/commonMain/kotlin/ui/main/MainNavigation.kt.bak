@@ -1,0 +1,1227 @@
+package ui.main
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AllInclusive
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.surfaceColorAtElevation
+import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
+import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.core.bundle.Bundle
+import androidx.navigation.NavHostController
+import androidx.navigation.NavType
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
+import com.dokar.sonner.Toaster
+import com.dokar.sonner.rememberToasterState
+import constant.Constants.CHANNEL
+import constant.Constants.EMPTY_STRING
+import constant.Constants.PREFIX_APP
+import constant.Constants.PREFIX_CAROUSEL
+import constant.Constants.PREFIX_CAROUSEL1
+import constant.Constants.PREFIX_COLLECTION
+import constant.Constants.PREFIX_COOLMARKET
+import constant.Constants.PREFIX_DYH
+import constant.Constants.PREFIX_FEED
+import constant.Constants.PREFIX_GAME
+import constant.Constants.PREFIX_HTTP
+import constant.Constants.PREFIX_PRODUCT
+import constant.Constants.PREFIX_TOPIC
+import constant.Constants.PREFIX_USER
+import constant.Constants.PREFIX_USER_LIST
+import constant.Constants.URL_LOGIN
+import copyToClipboard
+import openInBrowser
+import ui.app.AppScreen
+import ui.blacklist.BlackListScreen
+import ui.carousel.CarouselScreen
+import ui.collection.CollectionScreen
+import ui.component.SlideTransition
+import ui.coolpic.CoolPicScreen
+import ui.dyh.DyhScreen
+import ui.feed.FeedScreen
+import ui.ffflist.FFFListScreen
+import ui.ffflist.FFFListType
+import ui.history.HistoryScreen
+import ui.login.LoginScreen
+import ui.notification.NoticeScreen
+import ui.others.CopyTextScreen
+import ui.others.ImageScreen
+import ui.search.SearchResultScreen
+import ui.search.SearchScreen
+import ui.settings.AboutScreen
+import ui.settings.LicenseScreen
+import ui.settings.ParamsScreen
+import ui.topic.TopicScreen
+import ui.user.UserScreen
+import ui.webview.WebViewScreen
+import util.DeviceUtil
+import util.decode
+import util.encode
+import util.getReportUrl
+import util.http2https
+import java.net.URI
+import kotlin.math.min
+
+/**
+ * Created by bggRGjQaUbCoE on 2024/5/30
+ */
+@OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
+@Composable
+fun MainNavigation(
+    navController: NavHostController = rememberNavController(),
+) {
+
+    var initialPage = 0
+    var selectIndex by rememberSaveable { mutableIntStateOf(0) }
+    var compatId by remember { mutableStateOf<String?>(null) }
+    var compatReply by remember { mutableStateOf<Boolean?>(null) }
+    val windowSizeClass = calculateWindowSizeClass()
+    val toaster = rememberToasterState()
+
+    val isCompat = windowSizeClass.widthSizeClass == WindowWidthSizeClass.Compact
+    if (isCompat) {
+        if (!compatId.isNullOrEmpty()) {
+            navController.navigateToFeed(compatId.orEmpty(), compatReply ?: false)
+            compatId = null
+            compatReply = null
+        }
+    }
+
+    fun onViewFeed(viewId: String, isViewReply: Boolean) {
+        if (selectIndex != 2 && !isCompat) {
+            compatId = viewId
+            compatReply = isViewReply
+        } else {
+            navController.navigateToFeed(viewId, isViewReply)
+        }
+    }
+
+    Row(modifier = Modifier.fillMaxSize()) {
+        NavHost(
+            modifier = Modifier.weight(1f),
+            navController = navController,
+            startDestination = Router.MAIN.name,
+            enterTransition = {
+                SlideTransition.slideLeft.enterTransition()
+            },
+            exitTransition = {
+                SlideTransition.slideLeft.exitTransition()
+            },
+            popEnterTransition = {
+                SlideTransition.slideRight.enterTransition()
+            },
+            popExitTransition = {
+                SlideTransition.slideRight.exitTransition()
+            }
+        ) {
+            composable(route = Router.MAIN.name) {
+                MainScreen(
+                    selectIndex = selectIndex,
+                    setSelectIndex = {
+                        selectIndex = it
+                    },
+                    isCompat = isCompat,
+                    onParamsClick = {
+                        navController.navigate(Router.PARAMS.name)
+                    },
+                    onAboutClick = {
+                        navController.navigate(Router.ABOUT.name)
+                    },
+                    onViewUser = { uid ->
+                        navController.navigateToUser(uid)
+                    },
+                    onViewFeed = ::onViewFeed,
+                    onSearch = { title, pageType, pageParam ->
+                        initialPage = 0
+                        navController.navigateToSearch(title, pageType, pageParam)
+                    },
+                    onOpenLink = { viewUrl, viewTitle ->
+                        navController.onOpenLink(
+                            url = viewUrl,
+                            title = viewTitle,
+                            onViewFeed = { viewId, isViewReply ->
+                                onViewFeed(viewId, isViewReply)
+                            },
+                            toast = {
+                                toaster.show(it)
+                            }
+                        )
+                    },
+                    onCopyText = { text ->
+                        navController.navigateToCopyText(text)
+                    },
+                    /*onViewApp = { packageName ->
+                        navController.navigateToApp(packageName)
+                    },*/
+                    onLogin = {
+                        navController.navigate(Router.LOGIN.name)
+                    },
+                    /*onCheckUpdate = { data ->
+                        val bundle = Bundle()
+                        bundle.putParcelableArrayList("list", ArrayList(data))
+                        navController.navigate(route = Router.UPDATE.name, args = bundle)
+                    },*/
+                    onViewFFFList = { viewUid, viewType, id, title ->
+                        navController.navigateToFFFList(viewUid, viewType, id, title)
+                    },
+                    onReport = { viewId, reportType ->
+                        navController.navigateToWebView(getReportUrl(viewId, reportType))
+                    },
+                    onViewNotice = { type ->
+                        navController.navigateToNotice(type)
+                    },
+                    onViewBlackList = { type ->
+                        navController.navigateToBlackList(type)
+                    },
+                    onViewHistory = { type ->
+                        navController.navigateToHistory(type)
+                    },
+                    onViewImage = { picArr, initialPage ->
+                        navController.navigateToImageView(picArr, initialPage)
+                    },
+                )
+            }
+
+
+            composable(route = Router.PARAMS.name) {
+                ParamsScreen(
+                    onBackClick = {
+                        navController.popBackStack()
+                    }
+                )
+            }
+
+            composable(route = Router.ABOUT.name) {
+                AboutScreen(
+                    onBackClick = {
+                        navController.popBackStack()
+                    },
+                    onLicenseClick = {
+                        navController.navigate(Router.LICENSE.name)
+                    },
+                )
+            }
+
+            composable(route = Router.LICENSE.name) {
+                LicenseScreen(
+                    onBackClick = {
+                        navController.popBackStack()
+                    },
+                )
+            }
+
+            composable(
+                route = "${Router.FEED.name}/{id}/{isViewReply}",
+                arguments = listOf(
+                    navArgument("id") {
+                        type = NavType.StringType
+                    },
+                    navArgument("isViewReply") {
+                        type = NavType.BoolType
+                    },
+                )
+            ) {
+                val id = it.arguments?.getString("id").orEmpty()
+                val isViewReply = it.arguments?.getBoolean("isViewReply") ?: false
+                FeedScreen(
+                    onBackClick = {
+                        navController.popBackStack()
+                    },
+                    id = id,
+                    isViewReply = isViewReply,
+                    onViewUser = { viewUid ->
+                        navController.navigateToUser(viewUid)
+                    },
+                    onViewFeed = ::onViewFeed,
+                    onOpenLink = { viewUrl, viewTitle ->
+                        navController.onOpenLink(
+                            url = viewUrl,
+                            title = viewTitle,
+                            onViewFeed = { viewId, isViewReply ->
+                                onViewFeed(viewId, isViewReply)
+                            },
+                            toast = { text ->
+                                toaster.show(text)
+                            }
+                        )
+                    },
+                    onCopyText = { text ->
+                        navController.navigateToCopyText(text)
+                    },
+                    onReport = { viewId, reportType ->
+                        navController.navigateToWebView(getReportUrl(viewId, reportType))
+                    },
+                    onViewImage = { picArr, initialPage ->
+                        navController.navigateToImageView(picArr, initialPage)
+                    },
+                )
+            }
+
+            composable(
+                route = "${Router.COPY.name}/{text}",
+                arguments = listOf(
+                    navArgument("text") {
+                        type = NavType.StringType
+                        nullable = true
+                    }
+                )
+            ) {
+                val text = it.arguments?.getString("text").orEmpty()
+                CopyTextScreen(
+                    onBackClick = {
+                        navController.popBackStack()
+                    },
+                    text = text
+                )
+            }
+
+            composable(
+                route = "${Router.TOPIC}/{tag}/{id}",
+                arguments = listOf(
+                    navArgument("tag") {
+                        type = NavType.StringType
+                        nullable = true
+                    },
+                    navArgument("id") {
+                        type = NavType.StringType
+                        nullable = true
+                    },
+                )
+            ) {
+                val tag = it.arguments?.getString("tag")
+                val id = it.arguments?.getString("id")
+                TopicScreen(
+                    onBackClick = {
+                        navController.popBackStack()
+                    },
+                    tag = tag,
+                    id = id,
+                    onViewUser = { viewUid ->
+                        navController.navigateToUser(viewUid)
+                    },
+                    onViewFeed = ::onViewFeed,
+                    onOpenLink = { viewUrl, viewTitle ->
+                        navController.onOpenLink(
+                            url = viewUrl,
+                            title = viewTitle,
+                            onViewFeed = { viewId, isViewReply ->
+                                onViewFeed(viewId, isViewReply)
+                            },
+                            toast = { text ->
+                                toaster.show(text)
+                            }
+                        )
+                    },
+                    onCopyText = { text ->
+                        navController.navigateToCopyText(text)
+                    },
+                    onSearch = { title, pageType, pageParam ->
+                        // initialPage = 0
+                        navController.navigateToSearch(title, pageType, pageParam)
+                    },
+                    onReport = { viewId, reportType ->
+                        navController.navigateToWebView(getReportUrl(viewId, reportType))
+                    },
+                    onViewImage = { picArr, initialPage ->
+                        navController.navigateToImageView(picArr, initialPage)
+                    },
+                )
+            }
+
+            composable(
+                route = "${Router.APP.name}/{packageName}",
+                arguments = listOf(
+                    navArgument("packageName") {
+                    },
+                )
+            ) {
+                val packageName = it.arguments?.getString("packageName").orEmpty()
+                AppScreen(
+                    onBackClick = {
+                        navController.popBackStack()
+                    },
+                    packageName = packageName,
+                    onViewUser = { viewUid ->
+                        navController.navigateToUser(viewUid)
+                    },
+                    onViewFeed = ::onViewFeed,
+                    onOpenLink = { viewUrl, viewTitle ->
+                        navController.onOpenLink(
+                            url = viewUrl,
+                            title = viewTitle,
+                            onViewFeed = { viewId, isViewReply ->
+                                onViewFeed(viewId, isViewReply)
+                            },
+                            toast = { text ->
+                                toaster.show(text)
+                            }
+                        )
+                    },
+                    onCopyText = { text ->
+                        navController.navigateToCopyText(text)
+                    },
+                    onSearch = { title, pageType, pageParam ->
+                        // initialPage = 0
+                        navController.navigateToSearch(title, pageType, pageParam)
+                    },
+                    onReport = { viewId, reportType ->
+                        navController.navigateToWebView(getReportUrl(viewId, reportType))
+                    },
+                    onViewImage = { picArr, initialPage ->
+                        navController.navigateToImageView(picArr, initialPage)
+                    },
+                )
+            }
+
+            composable(
+                route = "${Router.SEARCH.name}/{title}/{pageType}/{pageParam}",
+                arguments = listOf(
+                    navArgument("title") {
+                        type = NavType.StringType
+                        nullable = true
+                    },
+                    navArgument("pageType") {
+                        type = NavType.StringType
+                        nullable = true
+                    },
+                    navArgument("pageParam") {
+                        type = NavType.StringType
+                        nullable = true
+                    },
+                )
+            ) {
+                val title = it.arguments?.getString("title")
+                val pageType = it.arguments?.getString("pageType")
+                val pageParam = it.arguments?.getString("pageParam")
+                SearchScreen(
+                    onBackClick = {
+                        navController.popBackStack()
+                    },
+                    title = title,
+                    onSearch = { keyword ->
+                        navController.navigateToSearchResult(keyword, title, pageType, pageParam)
+                    }
+                )
+            }
+
+            composable(
+                route = "${Router.SEARCHRESULT.name}/{keyword}/{title}/{pageType}/{pageParam}",
+                arguments = listOf(
+                    navArgument("keyword") {
+                        type = NavType.StringType
+                    },
+                    navArgument("title") {
+                        type = NavType.StringType
+                        nullable = true
+                    },
+                    navArgument("pageType") {
+                        type = NavType.StringType
+                        nullable = true
+                    },
+                    navArgument("pageParam") {
+                        type = NavType.StringType
+                        nullable = true
+                    },
+                )
+            ) {
+                val keyword = it.arguments?.getString("keyword").orEmpty()
+                val title = it.arguments?.getString("title")
+                val pageType = it.arguments?.getString("pageType")
+                val pageParam = it.arguments?.getString("pageParam")
+                SearchResultScreen(
+                    onBackClick = {
+                        navController.popBackStack()
+                    },
+                    keyword = keyword,
+                    title = title,
+                    pageType = pageType,
+                    pageParam = pageParam,
+                    onViewUser = { viewUid ->
+                        navController.navigateToUser(viewUid)
+                    },
+                    onViewFeed = ::onViewFeed,
+                    onOpenLink = { viewUrl, viewTitle ->
+                        navController.onOpenLink(
+                            url = viewUrl,
+                            title = viewTitle,
+                            onViewFeed = { viewId, isViewReply ->
+                                onViewFeed(viewId, isViewReply)
+                            },
+                            toast = { text ->
+                                toaster.show(text)
+                            }
+                        )
+                    },
+                    onCopyText = { text ->
+                        navController.navigateToCopyText(text)
+                    },
+                    initialPage = initialPage,
+                    updateInitPage = { index ->
+                        initialPage = index
+                    },
+                    onReport = { viewId, reportType ->
+                        navController.navigateToWebView(getReportUrl(viewId, reportType))
+                    },
+                    onViewImage = { picArr, initialPage ->
+                        navController.navigateToImageView(picArr, initialPage)
+                    },
+                )
+            }
+
+            composable(
+                route = "${Router.CAROUSEL.name}/{url}/{title}",
+                arguments = listOf(
+                    navArgument("url") {
+                        type = NavType.StringType
+                    },
+                    navArgument("title") {
+                        type = NavType.StringType
+                    },
+                )
+            ) {
+                val url = it.arguments?.getString("url").orEmpty()
+                val title = it.arguments?.getString("title").orEmpty()
+                CarouselScreen(
+                    onBackClick = {
+                        navController.popBackStack()
+                    },
+                    url = url,
+                    title = title,
+                    onViewUser = { viewUid ->
+                        navController.navigateToUser(viewUid)
+                    },
+                    onViewFeed = ::onViewFeed,
+                    onOpenLink = { viewUrl, viewTitle ->
+                        navController.onOpenLink(
+                            url = viewUrl,
+                            title = viewTitle,
+                            onViewFeed = { viewId, isViewReply ->
+                                onViewFeed(viewId, isViewReply)
+                            },
+                            toast = { text ->
+                                toaster.show(text)
+                            }
+                        )
+                    },
+                    onCopyText = { text ->
+                        navController.navigateToCopyText(text)
+                    },
+                    onReport = { viewId, reportType ->
+                        navController.navigateToWebView(getReportUrl(viewId, reportType))
+                    },
+                    onViewImage = { picArr, initialPage ->
+                        navController.navigateToImageView(picArr, initialPage)
+                    },
+                )
+            }
+
+            composable(
+                route = "${Router.COOLPIC.name}/{title}",
+                arguments = listOf(
+                    navArgument("title") {
+                        type = NavType.StringType
+                    },
+                )
+            ) {
+                val title = it.arguments?.getString("title").orEmpty()
+                CoolPicScreen(
+                    onBackClick = {
+                        navController.popBackStack()
+                    },
+                    title = title,
+                    onViewUser = { viewUid ->
+                        navController.navigateToUser(viewUid)
+                    },
+                    onViewFeed = ::onViewFeed,
+                    onOpenLink = { viewUrl, viewTitle ->
+                        navController.onOpenLink(
+                            url = viewUrl,
+                            title = viewTitle,
+                            onViewFeed = { viewId, isViewReply ->
+                                onViewFeed(viewId, isViewReply)
+                            },
+                            toast = { text ->
+                                toaster.show(text)
+                            }
+                        )
+                    },
+                    onCopyText = { text ->
+                        navController.navigateToCopyText(text)
+                    },
+                    onReport = { viewId, reportType ->
+                        navController.navigateToWebView(getReportUrl(viewId, reportType))
+                    },
+                    onViewImage = { picArr, initialPage ->
+                        navController.navigateToImageView(picArr, initialPage)
+                    },
+                )
+            }
+
+            composable(
+                route = "${Router.DYH.name}/{id}/{title}",
+                arguments = listOf(
+                    navArgument("id") {
+                        type = NavType.StringType
+                    },
+                    navArgument("title") {
+                        type = NavType.StringType
+                    },
+                )
+            ) {
+                val id = it.arguments?.getString("id").orEmpty()
+                val title = it.arguments?.getString("title").orEmpty()
+                DyhScreen(
+                    onBackClick = {
+                        navController.popBackStack()
+                    },
+                    id = id,
+                    title = title,
+                    onViewUser = { viewUid ->
+                        navController.navigateToUser(viewUid)
+                    },
+                    onViewFeed = ::onViewFeed,
+                    onOpenLink = { viewUrl, viewTitle ->
+                        navController.onOpenLink(
+                            url = viewUrl,
+                            title = viewTitle,
+                            onViewFeed = { viewId, isViewReply ->
+                                onViewFeed(viewId, isViewReply)
+                            },
+                            toast = { text ->
+                                toaster.show(text)
+                            }
+                        )
+                    },
+                    onCopyText = { text ->
+                        navController.navigateToCopyText(text)
+                    },
+                    onReport = { viewId, reportType ->
+                        navController.navigateToWebView(getReportUrl(viewId, reportType))
+                    },
+                    onViewImage = { picArr, initialPage ->
+                        navController.navigateToImageView(picArr, initialPage)
+                    },
+                )
+            }
+
+            composable(
+                route = "${Router.USER.name}/{uid}",
+                arguments = listOf(
+                    navArgument("uid") {
+                        type = NavType.StringType
+                    }
+                )
+            ) {
+                val uid = it.arguments?.getString("uid").orEmpty()
+                UserScreen(
+                    uid = uid,
+                    onBackClick = {
+                        navController.popBackStack()
+                    },
+                    onViewUser = { viewUid ->
+                        navController.navigateToUser(viewUid)
+                    },
+                    onViewFeed = ::onViewFeed,
+                    onOpenLink = { viewUrl, viewTitle ->
+                        navController.onOpenLink(
+                            url = viewUrl,
+                            title = viewTitle,
+                            onViewFeed = { viewId, isViewReply ->
+                                onViewFeed(viewId, isViewReply)
+                            },
+                            toast = { text ->
+                                toaster.show(text)
+                            }
+                        )
+                    },
+                    onCopyText = { text ->
+                        navController.navigateToCopyText(text)
+                    },
+                    onSearch = { title, pageType, pageParam ->
+                        initialPage = 0
+                        navController.navigateToSearch(title, pageType, pageParam)
+                    },
+                    onViewFFFList = { viewUid, viewType, id, title ->
+                        navController.navigateToFFFList(viewUid, viewType, id, title)
+                    },
+                    onReport = { viewId, reportType ->
+                        navController.navigateToWebView(getReportUrl(viewId, reportType))
+                    },
+                    onPMUser = { viewUid, viewUsername ->
+                        navController.navigateToChat(
+                            "${
+                                min(
+                                    viewUid.toLongOrNull() ?: 0,
+                                    DeviceUtil.uid.toLongOrNull() ?: 0
+                                )
+                            }_${
+                                maxOf(
+                                    viewUid.toLongOrNull() ?: 0,
+                                    DeviceUtil.uid.toLongOrNull() ?: 0
+                                )
+                            }",
+                            viewUid,
+                            viewUsername
+                        )
+                    },
+                    onViewImage = { picArr, initialPage ->
+                        navController.navigateToImageView(picArr, initialPage)
+                    },
+                )
+            }
+
+            composable(route = Router.LOGIN.name) {
+                LoginScreen(
+                    onBackClick = {
+                        if (navController.currentDestination?.route == Router.LOGIN.name) {
+                            navController.popBackStack()
+                        }
+                    }/*,
+                    onWebLogin = {
+                        navController.navigateToWebView(url = URL_LOGIN, isLogin = true)
+                    }*/
+                )
+            }
+
+            composable(
+                route = "${Router.COLLECTION.name}/{id}",
+                arguments = listOf(
+                    navArgument("id") {
+                        type = NavType.StringType
+                    },
+                )
+            ) {
+                val id = it.arguments?.getString("id").orEmpty()
+                CollectionScreen(
+                    onBackClick = {
+                        navController.popBackStack()
+                    },
+                    id = id,
+                    onViewUser = { viewUid ->
+                        navController.navigateToUser(viewUid)
+                    },
+                    onViewFeed = ::onViewFeed,
+                    onOpenLink = { viewUrl, viewTitle ->
+                        navController.onOpenLink(
+                            url = viewUrl,
+                            title = viewTitle,
+                            onViewFeed = { viewId, isViewReply ->
+                                onViewFeed(viewId, isViewReply)
+                            },
+                            toast = { text ->
+                                toaster.show(text)
+                            }
+                        )
+                    },
+                    onCopyText = { text ->
+                        navController.navigateToCopyText(text)
+                    },
+                    onReport = { viewId, reportType ->
+                        navController.navigateToWebView(getReportUrl(viewId, reportType))
+                    },
+                    onViewImage = { picArr, initialPage ->
+                        navController.navigateToImageView(picArr, initialPage)
+                    },
+                )
+            }
+
+            composable(
+                route = "${Router.NOTICE.name}/{type}",
+                arguments = listOf(
+                    navArgument("type") {
+                        type = NavType.StringType
+                    },
+                )
+            ) {
+                val type = it.arguments?.getString("type").orEmpty()
+                NoticeScreen(
+                    onBackClick = {
+                        navController.popBackStack()
+                    },
+                    type = type,
+                    onViewUser = { viewUid ->
+                        navController.navigateToUser(viewUid)
+                    },
+                    onViewFeed = ::onViewFeed,
+                    onOpenLink = { viewUrl, viewTitle ->
+                        navController.onOpenLink(
+                            url = viewUrl,
+                            title = viewTitle,
+                            onViewFeed = { viewId, isViewReply ->
+                                onViewFeed(viewId, isViewReply)
+                            },
+                            toast = { text ->
+                                toaster.show(text)
+                            }
+                        )
+                    },
+                    onCopyText = { text ->
+                        navController.navigateToCopyText(text)
+                    },
+                    onReport = { viewId, reportType ->
+                        navController.navigateToWebView(getReportUrl(viewId, reportType))
+                    },
+                    onViewChat = { ukey, uid, username ->
+                        navController.navigateToChat(ukey, uid, username)
+                    },
+                    onViewImage = { picArr, initialPage ->
+                        navController.navigateToImageView(picArr, initialPage)
+                    },
+                )
+            }
+
+            composable(
+                route = "${Router.FFFLIST.name}/{uid}/{type}/{id}/{title}",
+                arguments = listOf(
+                    navArgument("uid") {
+                        type = NavType.StringType
+                        nullable = true
+                    },
+                    navArgument("type") {
+                        type = NavType.StringType
+                    },
+                    navArgument("id") {
+                        type = NavType.StringType
+                        nullable = true
+                    },
+                    navArgument("title") {
+                        type = NavType.StringType
+                        nullable = true
+                    },
+                )
+            ) {
+                val uid = it.arguments?.getString("uid")
+                val type = it.arguments?.getString("type").orEmpty()
+                val id = it.arguments?.getString("id")
+                val title = it.arguments?.getString("title")
+                FFFListScreen(
+                    onBackClick = {
+                        navController.popBackStack()
+                    },
+                    id = id,
+                    title = title,
+                    uid = uid,
+                    type = type,
+                    onViewUser = { viewUid ->
+                        navController.navigateToUser(viewUid)
+                    },
+                    onViewFeed = ::onViewFeed,
+                    onOpenLink = { viewUrl, viewTitle ->
+                        navController.onOpenLink(
+                            url = viewUrl,
+                            title = viewTitle,
+                            onViewFeed = { viewId, isViewReply ->
+                                onViewFeed(viewId, isViewReply)
+                            },
+                            toast = { text ->
+                                toaster.show(text)
+                            }
+                        )
+                    },
+                    onCopyText = { text ->
+                        navController.navigateToCopyText(text)
+                    },
+                    onReport = { viewId, reportType ->
+                        navController.navigateToWebView(getReportUrl(viewId, reportType))
+                    },
+                    onViewFFFList = { viewUid, viewType, viewId, viewTitle ->
+                        navController.navigateToFFFList(viewUid, viewType, viewId, viewTitle)
+                    },
+                    onViewImage = { picArr, initialPage ->
+                        navController.navigateToImageView(picArr, initialPage)
+                    },
+                )
+            }
+
+            composable(
+                route = "${Router.IMAGEVIEW.name}/{picArr}/{initialPage}",
+                arguments = listOf(
+                    navArgument("picArr") {
+                        type = StringListNavType
+                    },
+                    navArgument("initialPage") {
+                        type = NavType.IntType
+                    },
+                )
+            ) {
+                val picArr =
+                    it.arguments?.getStringArrayList("picArr")?.map { url -> url.decode.http2https }
+                        ?: emptyList()
+                val initPage = it.arguments?.getInt("initialPage") ?: 0
+                ImageScreen(
+                    onBackClick = {
+                        navController.popBackStack()
+                    },
+                    picArr = picArr,
+                    initialPage = initPage,
+                )
+            }
+
+            composable(
+                route = "${Router.BLACKLIST.name}/{type}",
+                arguments = listOf(
+                    navArgument("type") {
+                        type = NavType.StringType
+                    },
+                )
+            ) {
+                val type = it.arguments?.getString("type").orEmpty()
+                BlackListScreen(
+                    onBackClick = {
+                        navController.popBackStack()
+                    },
+                    type = type,
+                    onViewUser = { uid ->
+                        navController.navigateToUser(uid)
+                    },
+                    onViewTopic = { tag, id ->
+                        navController.navigateToTopic(tag, id)
+                    }
+                )
+            }
+
+            composable(
+                route = "${Router.HISTORY.name}/{type}",
+                arguments = listOf(
+                    navArgument("type") {
+                        type = NavType.StringType
+                    },
+                )
+            ) {
+                val type = it.arguments?.getString("type").orEmpty()
+                HistoryScreen(
+                    onBackClick = {
+                        navController.popBackStack()
+                    },
+                    type = type,
+                    onViewUser = { uid ->
+                        navController.navigateToUser(uid)
+                    },
+                    onReport = { viewId, reportType ->
+                        navController.navigateToWebView(getReportUrl(viewId, reportType))
+                    },
+                    onOpenLink = { viewUrl, viewTitle ->
+                        navController.onOpenLink(
+                            url = viewUrl,
+                            title = viewTitle,
+                            onViewFeed = { viewId, isViewReply ->
+                                onViewFeed(viewId, isViewReply)
+                            },
+                            toast = { text ->
+                                toaster.show(text)
+                            }
+                        )
+                    },
+                    onViewFeed = ::onViewFeed,
+                    onCopyText = { text ->
+                        navController.navigateToCopyText(text)
+                    },
+                )
+            }
+
+            composable(
+                route = "${Router.WEBVIEW.name}/{url}/{isLogin}",
+                arguments = listOf(
+                    navArgument("url") {
+                        type = NavType.StringType
+                    },
+                    navArgument("isLogin") {
+                        type = NavType.BoolType
+                    }
+                )
+            ) {
+                val url = it.arguments?.getString("url").orEmpty()
+                val isLogin = it.arguments?.getBoolean("isLogin") ?: false
+                WebViewScreen(
+                    onBackClick = {
+                        if (navController.currentDestination?.route?.contains(Router.WEBVIEW.name) == true) {
+                            navController.popBackStack()
+                        }
+                    },
+                    url = url,
+                    isLogin = isLogin,
+                )
+            }
+
+        }
+
+        if (selectIndex != 2 && !isCompat) {
+            if (compatId.isNullOrEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxSize()
+                        .background(
+                            MaterialTheme.colorScheme.surfaceColorAtElevation(1.dp)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AllInclusive,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.outline,
+                        modifier = Modifier.size(55.dp)
+                    )
+                }
+            } else {
+                FeedScreen(
+                    modifier = Modifier.weight(1f),
+                    isCompat = false,
+                    onBackClick = { compatId = null },
+                    id = compatId.orEmpty(),
+                    isViewReply = compatReply ?: false,
+                    onViewUser = { viewUid ->
+                        navController.navigateToUser(viewUid)
+                    },
+                    onViewFeed = { viewId, viewReply ->
+                        compatId = viewId
+                        compatReply = viewReply
+                    },
+                    onOpenLink = { viewUrl, viewTitle ->
+                        navController.onOpenLink(
+                            url = viewUrl,
+                            title = viewTitle,
+                            onViewFeed = { viewId, isViewReply ->
+                                onViewFeed(viewId, isViewReply)
+                            },
+                            toast = {
+                                toaster.show(it)
+                            }
+                        )
+                    },
+                    onCopyText = { text ->
+                        navController.navigateToCopyText(text)
+                    },
+                    onReport = { viewId, reportType ->
+                        navController.navigateToWebView(getReportUrl(viewId, reportType))
+                    },
+                    onViewImage = { picArr, initialPage ->
+                        navController.navigateToImageView(picArr, initialPage)
+                    },
+                )
+            }
+        }
+    }
+
+    Toaster(
+        state = toaster,
+        alignment = Alignment.BottomCenter
+    )
+
+}
+
+fun NavHostController.onOpenLink(
+    url: String,
+    title: String? = null,
+    needConvert: Boolean = false,
+    onViewFeed: ((String, Boolean) -> Unit)? = null,
+    toast: (String) -> Unit,
+) {
+    if (url.isEmpty())
+        return
+    val path = with(url.decode) {
+        if (needConvert) {
+            if (this.startsWith(PREFIX_COOLMARKET))
+                this.replaceFirst(PREFIX_COOLMARKET, "/")
+            else {
+                val uri = URI(url)
+                if (uri.host?.contains(CHANNEL) == true)
+                    uri.path ?: url
+                else url
+            }
+        } else this
+    }
+    when {
+        path.startsWith(PREFIX_USER) -> {
+            navigateToUser(path.replaceFirst(PREFIX_USER, EMPTY_STRING))
+        }
+
+        path.startsWith(PREFIX_FEED) -> {
+            val id = path.replaceFirst(PREFIX_FEED, EMPTY_STRING).replace("?", "&")
+            if (onViewFeed == null) {
+                navigateToFeed(id, id.contains("rid"))
+            } else {
+                onViewFeed(id, id.contains("rid"))
+            }
+        }
+
+        path.startsWith(PREFIX_TOPIC) -> {
+            val tag = path.replaceFirst(PREFIX_TOPIC, EMPTY_STRING)
+                .replace("\\?type=[A-Za-z0-9]+".toRegex(), EMPTY_STRING)
+            if (path.contains("type=8"))
+                navigateToCoolPic(tag)
+            else
+                navigateToTopic(id = null, tag = tag)
+        }
+
+        path.startsWith(PREFIX_PRODUCT) -> {
+            navigateToTopic(
+                id = path.replaceFirst(PREFIX_PRODUCT, EMPTY_STRING),
+                tag = null,
+            )
+        }
+
+        path.startsWith(PREFIX_APP) -> {
+            navigateToApp(packageName = path.replaceFirst(PREFIX_APP, EMPTY_STRING))
+        }
+
+        path.startsWith(PREFIX_GAME) -> {
+            navigateToApp(packageName = path.replaceFirst(PREFIX_GAME, EMPTY_STRING))
+        }
+
+        path.startsWith(PREFIX_CAROUSEL) -> {
+            navigateToCarousel(
+                path.replaceFirst(PREFIX_CAROUSEL, EMPTY_STRING),
+                title.orEmpty()
+            )
+        }
+
+        path.startsWith(PREFIX_CAROUSEL1) -> {
+            navigateToCarousel(path.replaceFirst("#", EMPTY_STRING), title.orEmpty())
+        }
+
+        path.startsWith(PREFIX_USER_LIST) -> {
+            val type = when {
+                path.contains("myFollowList") -> FFFListType.USER_FOLLOW.name
+                else -> EMPTY_STRING
+            }
+            navigateToFFFList(DeviceUtil.uid, type, null, null)
+        }
+
+        path.startsWith(PREFIX_DYH) -> {
+            navigateToDyh(path.replaceFirst(PREFIX_DYH, EMPTY_STRING), title.orEmpty())
+        }
+
+        path.startsWith(PREFIX_COLLECTION) -> {
+            navigateToCollection(path.replaceFirst(PREFIX_COLLECTION, EMPTY_STRING))
+        }
+
+        else -> {
+            if (!needConvert)
+                onOpenLink(url, title, true, onViewFeed, toast)
+            else {
+                if (url.startsWith(PREFIX_HTTP)) {
+                    /*if (DeviceUtil.openInBrowser)
+                        openInBrowser(url)
+                    else
+                        navigateToWebView(url)*/
+                    openInBrowser(url)
+                } else {
+                    toast("unsupported url: $url")
+                    copyToClipboard(url)
+                }
+            }
+        }
+    }
+}
+
+fun NavHostController.navigateToCopyText(text: String?) {
+    navigate("${Router.COPY.name}/${text.encode}")
+}
+
+fun NavHostController.navigateToFeed(id: String, isViewReply: Boolean = false) {
+    navigate("${Router.FEED.name}/$id/$isViewReply")
+}
+
+fun NavHostController.navigateToUser(uid: String) {
+    navigate("${Router.USER.name}/$uid")
+}
+
+fun NavHostController.navigateToTopic(tag: String?, id: String?) {
+    navigate("${Router.TOPIC.name}/$tag/$id")
+}
+
+fun NavHostController.navigateToWebView(url: String, isLogin: Boolean = false) {
+    // navigate("${Router.WEBVIEW.name}/${url.encode}/$isLogin")
+}
+
+fun NavHostController.navigateToSearch(title: String?, pageType: String?, pageParam: String?) {
+    navigate("${Router.SEARCH.name}/$title/$pageType/$pageParam")
+}
+
+fun NavHostController.navigateToSearchResult(
+    keyword: String,
+    title: String?,
+    pageType: String?,
+    pageParam: String?
+) {
+    navigate("${Router.SEARCHRESULT.name}/${keyword.encode}/$title/$pageType/$pageParam")
+}
+
+fun NavHostController.navigateToApp(packageName: String) {
+    navigate("${Router.APP.name}/$packageName")
+}
+
+fun NavHostController.navigateToCarousel(url: String, title: String) {
+    navigate("${Router.CAROUSEL.name}/${url.encode}/$title")
+}
+
+fun NavHostController.navigateToFFFList(uid: String?, type: String, id: String?, title: String?) {
+    navigate("${Router.FFFLIST.name}/$uid/$type/$id/$title")
+}
+
+fun NavHostController.navigateToDyh(id: String, title: String) {
+    navigate("${Router.DYH.name}/$id/$title")
+}
+
+fun NavHostController.navigateToCoolPic(title: String) {
+    navigate("${Router.COOLPIC.name}/$title")
+}
+
+fun NavHostController.navigateToNotice(type: String) {
+    navigate("${Router.NOTICE.name}/$type")
+}
+
+fun NavHostController.navigateToBlackList(type: String) {
+    navigate("${Router.BLACKLIST.name}/$type")
+}
+
+fun NavHostController.navigateToHistory(type: String) {
+    navigate("${Router.HISTORY.name}/$type")
+}
+
+fun NavHostController.navigateToChat(ukey: String, uid: String, username: String) {
+    navigate("${Router.CHAT.name}/$ukey/$uid/$username")
+}
+
+fun NavHostController.navigateToCollection(id: String) {
+    navigate("${Router.COLLECTION.name}/$id")
+}
+
+fun NavHostController.navigateToImageView(picArr: List<String>, initialPage: Int) {
+    val picArrString = picArr.joinToString(",") { it.encode }
+    navigate("${Router.IMAGEVIEW.name}/$picArrString/$initialPage")
+}
+
+object StringListNavType : NavType<List<String>>(isNullableAllowed = false) {
+    override fun get(bundle: Bundle, key: String): List<String>? {
+        return bundle.getStringArrayList(key)?.toList()
+    }
+
+    override fun parseValue(value: String): List<String> {
+        return value.split(",")
+    }
+
+    override fun put(bundle: Bundle, key: String, value: List<String>) {
+        bundle.putStringArrayList(key, ArrayList(value))
+    }
+}

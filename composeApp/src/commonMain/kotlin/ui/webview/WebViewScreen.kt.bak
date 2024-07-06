@@ -1,0 +1,240 @@
+package ui.webview
+
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.ProgressIndicatorDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.style.TextOverflow
+import com.multiplatform.webview.request.RequestInterceptor
+import com.multiplatform.webview.request.WebRequest
+import com.multiplatform.webview.request.WebRequestInterceptResult
+import com.multiplatform.webview.web.LoadingState
+import com.multiplatform.webview.web.WebView
+import com.multiplatform.webview.web.WebViewNavigator
+import com.multiplatform.webview.web.rememberWebViewNavigator
+import com.multiplatform.webview.web.rememberWebViewState
+import constant.Constants.EMPTY_STRING
+import copyToClipboard
+import kotlinx.coroutines.launch
+import logic.repository.UserPreferencesRepo
+import openInBrowser
+import org.koin.compose.koinInject
+import ui.component.BackButton
+import util.DeviceUtil
+import util.DeviceUtil.szlmId
+import util.DeviceUtil.token
+import util.DeviceUtil.uid
+import util.DeviceUtil.userAgent
+import util.DeviceUtil.username
+
+/**
+ * Created by bggRGjQaUbCoE on 2024/7/2
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun WebViewScreen(
+    onBackClick: () -> Unit,
+    url: String,
+    isLogin: Boolean = false,
+) {
+    val state = rememberWebViewState(
+        url = url,
+        //  additionalHttpHeaders = emptyMap()
+    )
+    val scope = rememberCoroutineScope()
+    val loadingState = state.loadingState
+    val layoutDirection = LocalLayoutDirection.current
+    var dropdownMenuExpanded by remember { mutableStateOf(false) }
+    val progress by remember {
+        mutableFloatStateOf(
+            (loadingState as? LoadingState.Loading)?.progress ?: 0F
+        )
+    }
+    val animatedProgress by animateFloatAsState(
+        targetValue = progress,
+        animationSpec = ProgressIndicatorDefaults.ProgressAnimationSpec, label = EMPTY_STRING
+    )
+    val userPreferencesRepo = koinInject<UserPreferencesRepo>()
+
+    state.webSettings.apply {
+        isJavaScriptEnabled = true
+        androidWebSettings.apply {
+            isAlgorithmicDarkeningAllowed = true
+            safeBrowsingEnabled = true
+            supportZoom = true
+        }
+        customUserAgentString = userAgent
+    }
+
+    /*LaunchedEffect(state.loadingState) {
+        if (state.loadingState is LoadingState.Finished) {
+            state.cookieManager.removeAllCookies()
+            state.cookieManager.setCookie(
+                "https://github.com",
+                Cookie(
+                    name = "test",
+                    value = "value",
+                    domain = "github.com",
+                    expiresDate = 1896863778
+                )
+            )
+        }
+    }*/
+
+    val navigator = rememberWebViewNavigator(
+        requestInterceptor =
+        object : RequestInterceptor {
+            override fun onInterceptUrlRequest(
+                request: WebRequest,
+                navigator: WebViewNavigator
+            ): WebRequestInterceptResult {
+                if (isLogin && request.url == "https://www.coolapk.com/") {
+                    scope.launch {
+                        val cookies = state.cookieManager.getCookies(request.url)
+                        val uid = cookies.find { it.name == "uid" }?.value
+                        val username = cookies.find { it.name == "username" }?.value
+                        val token = cookies.find { it.name == "token" }?.value
+                        if (!uid.isNullOrEmpty() && !username.isNullOrEmpty() && !token.isNullOrEmpty()) {
+                            userPreferencesRepo.apply {
+                                setUid(uid)
+                                setUsername(username)
+                                setToken(token)
+                                setIsLogin(true)
+                            }
+                        }
+                        navigator.stopLoading()
+                        onBackClick()
+                    }
+                }
+                return if (DeviceUtil.isLogin && request.url.contains(".coolapk.com")) {
+                    WebRequestInterceptResult.Modify(
+                        WebRequest(
+                            url = request.url,
+                            headers = mutableMapOf("Cookie" to "DID=$szlmId; forward=https://www.coolapk.com; displayVersion=v14; uid=$uid; username=$username; token=$token"),
+                        ),
+                    )
+                } else {
+                    WebRequestInterceptResult.Allow
+                }
+            }
+        },
+    )
+
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        topBar = {
+            TopAppBar(
+                windowInsets = WindowInsets.systemBars
+                    .only(WindowInsetsSides.Start + WindowInsetsSides.Top),
+                navigationIcon = {
+                    BackButton {
+                        onBackClick()
+                        /*if (navigator.canGoBack) {
+                            navigator.navigateBack()
+                        } else {
+                            onBackClick()
+                        }*/
+                    }
+                },
+                title = {
+                    Text(
+                        text = state.pageTitle.orEmpty(),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                },
+                actions = {
+                    Box {
+                        IconButton(onClick = { dropdownMenuExpanded = true }) {
+                            Icon(
+                                Icons.Default.MoreVert,
+                                contentDescription = null
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = dropdownMenuExpanded,
+                            onDismissRequest = { dropdownMenuExpanded = false }
+                        ) {
+                            listOf("Refresh", "Copy", "Open in Browser")
+                                .forEachIndexed { index, menu ->
+                                    DropdownMenuItem(
+                                        text = { Text(menu) },
+                                        onClick = {
+                                            dropdownMenuExpanded = false
+                                            when (index) {
+                                                0 -> navigator.reload()
+
+                                                1 -> {
+                                                    state.lastLoadedUrl?.let {
+                                                        copyToClipboard(it)
+                                                    }
+                                                }
+
+                                                2 -> {
+                                                    state.lastLoadedUrl?.let {
+                                                        openInBrowser(it)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    )
+                                }
+
+                        }
+                    }
+                },
+            )
+        }
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(
+                    top = paddingValues.calculateTopPadding(),
+                    bottom = paddingValues.calculateBottomPadding(),
+                    start = paddingValues.calculateLeftPadding(layoutDirection),
+                )
+        ) {
+            if (loadingState is LoadingState.Loading) {
+                LinearProgressIndicator(
+                    progress = { loadingState.progress },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+
+            WebView(
+                state = state,
+                navigator = navigator,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+    }
+
+}

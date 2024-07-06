@@ -1,0 +1,95 @@
+import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import di.appModule
+import di.httpModule
+import logic.datastore.ThemeMode
+import logic.repository.UserPreferencesRepo
+import logic.repository.UserPreferencesRepo.Companion.defaultPrefs
+import org.koin.compose.KoinApplication
+import org.koin.compose.koinInject
+import ui.main.MainNavigation
+import ui.theme.C001apkKMPTheme
+import util.DeviceUtil
+import util.DeviceUtil.apiVersion
+import util.DeviceUtil.isLogin
+import util.DeviceUtil.recordHistory
+import util.DeviceUtil.sdkInt
+import util.DeviceUtil.showSquare
+import util.DeviceUtil.szlmId
+import util.DeviceUtil.token
+import util.DeviceUtil.uid
+import util.DeviceUtil.userAgent
+import util.DeviceUtil.username
+import util.DeviceUtil.versionCode
+import util.DeviceUtil.versionName
+import util.DeviceUtil.xAppDevice
+
+/**
+ * Created by bggRGjQaUbCoE on 2024/6/27
+ */
+
+val LocalUserPreferences = staticCompositionLocalOf { defaultPrefs }
+
+@Composable
+fun App() {
+
+
+    KoinApplication(
+        application = { modules(appModule, httpModule) }
+    ) {
+        val userPreferencesRepo = koinInject<UserPreferencesRepo>()
+        val prefs by userPreferencesRepo.prefs.collectAsStateWithLifecycle(initialValue = defaultPrefs)
+
+        szlmId = prefs.szlmId
+        versionName = prefs.versionName
+        versionCode = prefs.versionCode
+        userAgent = prefs.userAgent
+        sdkInt = prefs.sdkInt
+        uid = prefs.uid
+        username = prefs.username
+        token = prefs.token
+        apiVersion = prefs.apiVersion
+        xAppDevice = prefs.xAppDevice
+        showSquare = prefs.showSquare
+        isLogin = prefs.isLogin
+        recordHistory = prefs.recordHistory
+        DeviceUtil.openInBrowser = prefs.openInBrowser
+
+        CompositionLocalProvider(
+            LocalUserPreferences provides prefs
+        ) {
+            C001apkKMPTheme(
+                darkTheme = when (prefs.themeMode) {
+                    ThemeMode.FOLLOW_SYSTEM -> isSystemInDarkTheme()
+                    ThemeMode.ALWAYS_ON -> true
+                    ThemeMode.ALWAYS_OFF -> false
+                },
+                themeType = prefs.themeType,
+                seedColor = prefs.seedColor,
+                materialYou = prefs.materialYou,
+                pureBlack = prefs.pureBlack,
+                fontScale = prefs.fontScale,
+                contentScale = prefs.contentScale,
+                content = {
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.background)
+                    ) {
+                        MainNavigation()
+                    }
+                }
+            )
+        }
+    }
+
+}
